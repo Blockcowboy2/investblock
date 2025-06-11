@@ -225,6 +225,30 @@
 @layer components;
 
 @layer utilities {
+  .visible {
+    visibility: visible;
+  }
+
+  .absolute {
+    position: absolute;
+  }
+
+  .fixed {
+    position: fixed;
+  }
+
+  .relative {
+    position: relative;
+  }
+
+  .static {
+    position: static;
+  }
+
+  .sticky {
+    position: sticky;
+  }
+
   .row-start-2 {
     grid-row-start: 2;
   }
@@ -245,6 +269,14 @@
     display: grid;
   }
 
+  .hidden {
+    display: none;
+  }
+
+  .inline-block {
+    display: inline-block;
+  }
+
   .h-10 {
     height: calc(var(--spacing) * 10);
   }
@@ -255,6 +287,10 @@
 
   .w-full {
     width: 100%;
+  }
+
+  .resize {
+    resize: both;
   }
 
   .list-inside {
@@ -419,6 +455,15 @@
   .antialiased {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .blur {
+    --tw-blur: blur(8px);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .filter {
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
   .transition-colors {

@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirestore, collection, addDoc } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, User } from 'firebase/auth'; // Import necessary auth modules and User type
 import { app } from "../firebase-config"; // Import app from the config file
 
 // Initialize Firebase services using the imported app
 const storage = getStorage(app);
 const db = getFirestore(app);
+const auth = getAuth(app); // Initialize Auth
 
 interface Attribute {
   key: string;
@@ -45,6 +47,20 @@ const DocumentMetadataForm: React.FC = () => {
     additional_media: [],
   });
 
+  const [user, setUser] = useState<User | null>(null); // State to hold the authenticated user
+  const [loadingAuth, setLoadingAuth] = useState(true); // State to track auth loading
+
+  // Listen for authentication state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoadingAuth(false);
+    });
+
+    // Clean up the subscription when the component unmounts
+    return () => unsubscribe();
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setMetadata({ ...metadata, [name]: value });
@@ -72,32 +88,46 @@ const DocumentMetadataForm: React.FC = () => {
     const file = files[0];
     if (!file) return;
 
-    const storageRef = ref(storage, `${field}/${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const uri = await getDownloadURL(snapshot.ref);
+    // Ensure user is logged in before uploading
+    if (!user) {
+      alert('Please sign in to upload files.');
+      return;
+    }
 
-    if (field === 'image') {
-      setMetadata({ ...metadata, image: uri });
-    } else if (field === 'documents') {
-      if (index !== undefined) {
-        const newDocuments = [...metadata.documents];
-        newDocuments[index].uri = uri;
-        newDocuments[index].name = file.name;
-        newDocuments[index].type = file.type;
-        setMetadata({ ...metadata, documents: newDocuments });
-      } else {
-         setMetadata({ ...metadata, documents: [...metadata.documents, { name: file.name, uri, type: file.type }] });
+    // Include user uid in storage path for organization/access control (optional but recommended)
+    const storagePath = `${user.uid}/${field}/${file.name}`;
+    const storageRef = ref(storage, storagePath);
+
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const uri = await getDownloadURL(snapshot.ref);
+
+      if (field === 'image') {
+        setMetadata({ ...metadata, image: uri });
+      } else if (field === 'documents') {
+        if (index !== undefined) {
+          const newDocuments = [...metadata.documents];
+          newDocuments[index].uri = uri;
+          newDocuments[index].name = file.name;
+          newDocuments[index].type = file.type;
+          setMetadata({ ...metadata, documents: newDocuments });
+        } else {
+           setMetadata({ ...metadata, documents: [...metadata.documents, { name: file.name, uri, type: file.type }] });
+        }
+      } else if (field === 'additional_media') {
+         if (index !== undefined) {
+          const newMedia = [...metadata.additional_media];
+          newMedia[index].uri = uri;
+          newMedia[index].name = file.name;
+          newMedia[index].type = file.type;
+          setMetadata({ ...metadata, additional_media: newMedia });
+        } else {
+           setMetadata({ ...metadata, additional_media: [...metadata.additional_media, { name: file.name, uri, type: file.type }] });
+        }
       }
-    } else if (field === 'additional_media') {
-       if (index !== undefined) {
-        const newMedia = [...metadata.additional_media];
-        newMedia[index].uri = uri;
-        newMedia[index].name = file.name;
-        newMedia[index].type = file.type;
-        setMetadata({ ...metadata, additional_media: newMedia });
-      } else {
-         setMetadata({ ...metadata, additional_media: [...metadata.additional_media, { name: file.name, uri, type: file.type }] });
-      }
+    } catch (error) {
+      console.error("Error uploading file: ", error);
+      alert('Error uploading file.');
     }
   };
 
@@ -122,17 +152,44 @@ const DocumentMetadataForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Ensure user is logged in before saving metadata
+    if (!user) {
+      alert('Please sign in to save metadata.');
+      return;
+    }
+
     try {
       // Save metadata to Firestore
-      await addDoc(collection(db, "documentMetadata"), metadata);
+      // Optionally, include the user's UID in the document data or as the document ID
+      await addDoc(collection(db, `users/${user.uid}/documentMetadata`), metadata);
       alert('Metadata saved successfully!');
       // Reset form or navigate
+       setMetadata({
+        name: '',
+        description: '',
+        image: '',
+        external_url: '',
+        attributes: [],
+        documents: [],
+        additional_media: [],
+      });
+
     } catch (error) {
       console.error("Error adding document: ", error);
       alert('Error saving metadata.');
     }
   };
 
+  if (loadingAuth) {
+    return <div>Loading authentication state...</div>;
+  }
+
+  if (!user) {
+    return <div>Please sign in to add document metadata.</div>;
+  }
+
+  // Render the form if user is authenticated
   return (
     <form onSubmit={handleSubmit}>
       <div>
