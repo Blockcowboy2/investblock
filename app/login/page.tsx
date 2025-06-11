@@ -79,6 +79,7 @@ const AuthPage: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setError(null);
     try {
+      const provider = new GoogleAuthProvider(); // Instantiate the provider here
       await signInWithPopup(auth, provider);
       // User state and Firestore document will be handled by the onAuthStateChanged listener
     } catch (err: any) {

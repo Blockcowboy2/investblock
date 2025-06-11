@@ -93,10 +93,6 @@ const DocumentMetadataForm: React.FC = () => {
     setMetadata({ ...metadata, attributes: newAttributes });
   };
 
-  const addAttribute = () => {
-    setMetadata({ ...metadata, attributes: [...metadata.attributes, { key: '', value: '' }] });
-  };
-
   const removeAttribute = (index: number) => {
     const newAttributes = metadata.attributes.filter((_, i) => i !== index);
     setMetadata({ ...metadata, attributes: newAttributes });
@@ -181,12 +177,6 @@ const DocumentMetadataForm: React.FC = () => {
    const addAttribute = () => {
       if (!isAdmin) return; // Only allow admin to add fields
     setMetadata({ ...metadata, attributes: [...metadata.attributes, { key: '', value: '' }] });
-  };
-
-   const removeAttribute = (index: number) => {
-      if (!isAdmin) return; // Only allow admin to remove fields
-    const newAttributes = metadata.attributes.filter((_, i) => i !== index);
-    setMetadata({ ...metadata, attributes: newAttributes });
   };
 
 
