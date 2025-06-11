@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getFirestore, collection, addDoc } from "firebase/firestore";
-import { getAuth, onAuthStateChanged, User } from 'firebase/auth'; // Import necessary auth modules and User type
-import { app } from "../firebase-config"; // Import app from the config file
+import { getFirestore, collection, addDoc, doc, getDoc } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
+import { app } from "../firebase-config";
 
 // Initialize Firebase services using the imported app
 const storage = getStorage(app);
 const db = getFirestore(app);
-const auth = getAuth(app); // Initialize Auth
+const auth = getAuth(app);
 
 interface Attribute {
   key: string;
@@ -29,11 +29,11 @@ interface Document {
 interface DocumentMetadata {
   name: string;
   description: string;
-  image: string; // Firebase Storage URI
+  image: string;
   external_url: string;
   attributes: Attribute[];
-  documents: Document[]; // Firebase Storage URIs
-  additional_media: MediaItem[]; // Firebase Storage URIs
+  documents: Document[];
+  additional_media: MediaItem[];
 }
 
 const DocumentMetadataForm: React.FC = () => {
@@ -47,19 +47,40 @@ const DocumentMetadataForm: React.FC = () => {
     additional_media: [],
   });
 
-  const [user, setUser] = useState<User | null>(null); // State to hold the authenticated user
-  const [loadingAuth, setLoadingAuth] = useState(true); // State to track auth loading
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false); // State to track admin status
+  const [loadingAdminStatus, setLoadingAdminStatus] = useState(true); // State to track loading admin status
 
-  // Listen for authentication state changes
+  // Listen for authentication state changes and fetch admin status
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       setLoadingAuth(false);
+
+      if (firebaseUser) {
+        // Fetch admin status
+        setLoadingAdminStatus(true);
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          setIsAdmin(userDocSnap.data().isAdmin === true);
+        } else {
+          // If user document doesn't exist, they are not an admin
+          setIsAdmin(false);
+        }
+        setLoadingAdminStatus(false);
+      } else {
+        // If no user, they are not an admin
+        setIsAdmin(false);
+        setLoadingAdminStatus(false);
+      }
     });
 
     // Clean up the subscription when the component unmounts
-    return () => unsubscribe();
-  }, []);
+    return () => unsubscribeAuth();
+  }, []); // Depend on auth state
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -88,9 +109,13 @@ const DocumentMetadataForm: React.FC = () => {
     const file = files[0];
     if (!file) return;
 
-    // Ensure user is logged in before uploading
+    // Ensure user is logged in and is admin before uploading
     if (!user) {
       alert('Please sign in to upload files.');
+      return;
+    }
+     if (!isAdmin) {
+      alert('You do not have admin privileges to upload files.');
       return;
     }
 
@@ -132,37 +157,55 @@ const DocumentMetadataForm: React.FC = () => {
   };
 
   const addDocument = () => {
+     if (!isAdmin) return; // Only allow admin to add fields
     setMetadata({ ...metadata, documents: [...metadata.documents, { name: '', uri: '', type: '' }] });
   };
 
   const removeDocument = (index: number) => {
+     if (!isAdmin) return; // Only allow admin to remove fields
     const newDocuments = metadata.documents.filter((_, i) => i !== index);
     setMetadata({ ...metadata, documents: newDocuments });
   };
 
    const addAdditionalMedia = () => {
+      if (!isAdmin) return; // Only allow admin to add fields
     setMetadata({ ...metadata, additional_media: [...metadata.additional_media, { name: '', uri: '', type: '' }] });
   };
 
   const removeAdditionalMedia = (index: number) => {
+     if (!isAdmin) return; // Only allow admin to remove fields
     const newMedia = metadata.additional_media.filter((_, i) => i !== index);
     setMetadata({ ...metadata, additional_media: newMedia });
+  };
+
+   const addAttribute = () => {
+      if (!isAdmin) return; // Only allow admin to add fields
+    setMetadata({ ...metadata, attributes: [...metadata.attributes, { key: '', value: '' }] });
+  };
+
+   const removeAttribute = (index: number) => {
+      if (!isAdmin) return; // Only allow admin to remove fields
+    const newAttributes = metadata.attributes.filter((_, i) => i !== index);
+    setMetadata({ ...metadata, attributes: newAttributes });
   };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Ensure user is logged in before saving metadata
+    // Ensure user is logged in and is admin before saving metadata
     if (!user) {
       alert('Please sign in to save metadata.');
       return;
     }
+    if (!isAdmin) {
+      alert('You do not have admin privileges to save metadata.');
+      return;
+    }
 
     try {
-      // Save metadata to Firestore
-      // Optionally, include the user's UID in the document data or as the document ID
-      await addDoc(collection(db, `users/${user.uid}/documentMetadata`), metadata);
+      // Save metadata to the top-level 'nfts' collection
+      await addDoc(collection(db, 'nfts'), metadata);
       alert('Metadata saved successfully!');
       // Reset form or navigate
        setMetadata({
@@ -181,15 +224,19 @@ const DocumentMetadataForm: React.FC = () => {
     }
   };
 
-  if (loadingAuth) {
-    return <div>Loading authentication state...</div>;
+  if (loadingAuth || loadingAdminStatus) {
+    return <div>Loading authentication and admin status...</div>;
   }
 
   if (!user) {
     return <div>Please sign in to add document metadata.</div>;
   }
 
-  // Render the form if user is authenticated
+  if (!isAdmin) {
+      return <div>You do not have permission to add document metadata.</div>;
+  }
+
+  // Render the form if user is authenticated and is admin
   return (
     <form onSubmit={handleSubmit}>
       <div>

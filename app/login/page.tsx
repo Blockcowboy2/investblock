@@ -10,9 +10,11 @@ import {
   onAuthStateChanged,
   User // Import User type
 } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"; // Import Firestore functions
 import { app } from '../../firebase-config'; // Assuming firebase-config.ts exports 'app'
 
 const auth = getAuth(app);
+const db = getFirestore(app); // Initialize Firestore
 
 const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,23 +22,44 @@ const AuthPage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Set up an auth state change listener
+  // Set up an auth state change listener and create user document if it doesn't exist
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       // We don't need loading state here as this page is specifically for auth
+
+      if (firebaseUser) {
+        // Check if user document exists in Firestore
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (!userDocSnap.exists()) {
+          // If document doesn't exist, create it with isAdmin: false
+          try {
+            await setDoc(userDocRef, {
+              email: firebaseUser.email, // Optionally store email
+              isAdmin: false,
+              createdAt: new Date() // Optionally store creation date
+            });
+            console.log("User document created for", firebaseUser.uid);
+          } catch (firestoreError: any) {
+            console.error("Error creating user document:", firestoreError);
+            // Handle error, maybe show a message to the user
+          }
+        }
+      }
     });
 
     // Clean up the listener when the component unmounts
     return () => unsubscribe();
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // User state will be updated by the onAuthStateChanged listener
+      // User state and Firestore document will be handled by the onAuthStateChanged listener
     } catch (err: any) {
       setError(err.message);
     }
@@ -47,7 +70,7 @@ const AuthPage: React.FC = () => {
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // User state will be updated by the onAuthStateChanged listener
+      // User state and Firestore document will be handled by the onAuthStateChanged listener
     } catch (err: any) {
       setError(err.message);
     }
@@ -56,9 +79,8 @@ const AuthPage: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setError(null);
     try {
-      const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      // User state will be updated by the onAuthStateChanged listener
+      // User state and Firestore document will be handled by the onAuthStateChanged listener
     } catch (err: any) {
        // Handle potential errors, e.g., popup closed, access denied
        console.error("Google Sign-In Error:", err);
